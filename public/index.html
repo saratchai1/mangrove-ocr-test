@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="POC อัปโหลดเอกสาร เรียก OCR API และเติมข้อมูลหนังสือให้ผู้ใช้ตรวจสอบก่อนยืนยัน"
+    />
+    <title>Mangrove OCR POC</title>
+    <link rel="stylesheet" href="/styles-base.css" />
+    <link rel="stylesheet" href="/styles-components.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Mangrove OCR POC">
+        <span class="brand-mark" aria-hidden="true">M</span>
+        <span>
+          <strong>Mangrove OCR</strong>
+          <small>Document intake POC</small>
+        </span>
+      </a>
+      <span class="environment-badge">POC · ไม่บันทึกลงฐานข้อมูล</span>
+    </header>
+
+    <main class="page-shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">เอกสารเข้า → OCR → ตรวจทาน → ยืนยัน</p>
+          <h1>ทดลองเติมข้อมูลจากหนังสือสแกนแบบมีคนตรวจสอบ</h1>
+          <p>
+            เลือกประเภทเอกสารก่อน อัปโหลด PDF/JPG/PNG ระบบจะส่งไฟล์จาก Worker ไปยัง OCR API
+            แล้วเติมค่าที่คาดว่าเป็นเลขที่หนังสือ วันที่ เรื่อง ผู้รับ อ้างถึง เอกสารแนบ และผู้ลงนาม
+          </p>
+        </div>
+        <div class="privacy-callout">
+          <span class="callout-icon" aria-hidden="true">!</span>
+          <div>
+            <strong>ไฟล์จะถูกส่งไปผู้ให้บริการ OCR ภายนอก</strong>
+            <span>ใช้เอกสารทดสอบที่ได้รับอนุญาตเท่านั้น และตรวจทุกช่องก่อนกดยืนยัน</span>
+          </div>
+        </div>
+      </section>
+
+      <ol class="stepper" aria-label="ขั้นตอนการทำงาน">
+        <li class="step is-active" data-step="1"><span>1</span><b>เลือกประเภท</b></li>
+        <li class="step" data-step="2"><span>2</span><b>อัปโหลดและ OCR</b></li>
+        <li class="step" data-step="3"><span>3</span><b>ตรวจและแก้ไข</b></li>
+        <li class="step" data-step="4"><span>4</span><b>ยืนยันข้อมูล</b></li>
+      </ol>
+
+      <div id="globalMessage" class="message" hidden role="alert"></div>
+
+      <div class="workspace-grid">
+        <section class="panel upload-panel" aria-labelledby="uploadTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="section-number">01</p>
+              <h2 id="uploadTitle">เตรียมเอกสาร</h2>
+            </div>
+            <span id="providerStatus" class="status-pill status-neutral">กำลังตรวจสอบ API</span>
+          </div>
+
+          <label class="form-field">
+            <span>ประเภทเอกสาร</span>
+            <select id="documentType" aria-describedby="documentTypeHelp"></select>
+            <small id="documentTypeHelp"></small>
+          </label>
+
+          <label id="pocTokenField" class="form-field" hidden>
+            <span>รหัสสำหรับทดสอบ POC</span>
+            <input id="pocToken" type="password" autocomplete="off" placeholder="กรอกรหัสที่ตั้งใน Worker secret" />
+            <small>รหัสนี้ส่งเฉพาะกับคำขอ OCR และไม่ถูกเก็บในหน้าเว็บ</small>
+          </label>
+
+          <div
+            id="dropzone"
+            class="dropzone"
+            role="button"
+            tabindex="0"
+            aria-controls="fileInput"
+            aria-label="เลือกหรือลากไฟล์เอกสารมาวาง"
+          >
+            <input id="fileInput" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" hidden />
+            <div class="drop-icon" aria-hidden="true">↑</div>
+            <strong>ลากไฟล์มาวาง หรือคลิกเพื่อเลือก</strong>
+            <span id="fileLimitText">รองรับ PDF, JPG และ PNG</span>
+          </div>
+
+          <div id="selectedFile" class="selected-file" hidden>
+            <div class="file-symbol" aria-hidden="true">DOC</div>
+            <div class="file-copy">
+              <strong id="selectedFileName"></strong>
+              <span id="selectedFileMeta"></span>
+            </div>
+            <button id="removeFile" class="icon-button" type="button" aria-label="นำไฟล์ออก">×</button>
+          </div>
+
+          <div id="previewFrame" class="preview-frame" hidden></div>
+
+          <button id="runOcr" class="primary-button" type="button" disabled>
+            <span class="button-label">อ่านเอกสารและเติมข้อมูล</span>
+            <span class="button-loader" hidden aria-hidden="true"></span>
+          </button>
+
+          <div class="flow-note">
+            <strong>ขอบเขต POC</strong>
+            <p>ไฟล์และค่าที่ OCR อ่านได้อยู่ในหน่วยความจำของคำขอเท่านั้น ยังไม่มี R2, D1 หรือระบบันทึกเอกสาร</p>
+          </div>
+        </section>
+
+        <section class="panel result-panel" aria-labelledby="resultTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="section-number">02</p>
+              <h2 id="resultTitle">ตรวจข้อมูลก่อนยืนยัน</h2>
+            </div>
+            <span id="resultStatus" class="status-pill status-neutral">ยังไม่มีผลลัพธ์</span>
+          </div>
+
+          <div id="emptyResult" class="empty-state">
+            <div class="empty-illustration" aria-hidden="true">OCR</div>
+            <h3>ช่องข้อมูลจะปรากฏหลัง OCR เสร็จ</h3>
+            <p>ค่าความมั่นใจต่ำจะถูกเน้นให้ตรวจเป็นพิเศษ และทุกช่อยังแก้ไขได้</p>
+          </div>
+
+          <div id="resultContent" hidden>
+            <div id="resultMeta" class="result-meta"></div>
+            <div id="warningBox" class="warning-box" hidden>
+              <strong>จุดที่ต้องตรวจ</strong>
+              <ul id="warningList"></ul>
+            </div>
+
+            <form id="reviewForm" class="review-form" novalidate>
+              <div id="fieldsContainer" class="fields-grid"></div>
+            </form>
+
+            <details class="raw-ocr">
+              <summary>ดูข้อความ OCR ต้นฉบับ</summary>
+              <pre id="rawOcrText"></pre>
+            </details>
+
+            <div class="result-actions">
+              <button id="resetAll" class="secondary-button" type="button">เริ่มใหม่</button>
+              <button id="confirmData" class="primary-button" type="button">ยืนยันข้อมูลที่ตรวจแล้ว</button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <section id="confirmedCard" class="confirmed-card" hidden aria-labelledby="confirmedTitle">
+        <div>
+          <p class="eyebrow">ยืนยันแล้วใน POC</p>
+          <h2 id="confirmedTitle">ข้อมูลพร้อมส่งต่อไปขั้นบันทึกของระบบจริง</h2>
+          <p>
+            Worker ตรวจ schema และสร้าง JSON จากค่าหลังแก้ไขเพื่อใช้ทดสอบ contract เท่านั้น ขั้นตอนนี้ยังไม่เขียนข้อมูลลงฐานข้อมูล
+          </p>
+        </div>
+        <div class="confirmed-actions">
+          <button id="downloadJson" class="secondary-button" type="button">ดาวน์โหลด JSON</button>
+        </div>
+        <pre id="confirmedJson"></pre>
+      </section>
+    </main>
+
+    <footer>
+      <span>Mangrove OCR Test · Human-in-the-loop document intake</span>
+      <span id="footerProvider">OCR provider: checking…</span>
+    </footer>
+
+    <noscript>หน้านี้ต้องเปิด JavaScript เพื่ออัปโหลดและตรวจผล OCR</noscript>
+    <script src="/app-core.js"></script>
+    <script src="/app-flow.js"></script>
+    <script src="/app-review.js"></script>
+  </body>
+</html>

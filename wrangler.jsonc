@@ -1,0 +1,16 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "mangrove-ocr-test",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-09-04",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "vars": {
+    "OCR_SPACE_ENDPOINT": "https://api.ocr.space/parse/image",
+    "OCR_MAX_FILE_BYTES": "1048576",
+    "OCR_TIMEOUT_MS": "60000"
+  }
+}
